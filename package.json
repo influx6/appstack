@@ -1,6 +1,6 @@
 {
   "name": "appstack",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "utility chain with classes,events,promises,etc",
   "main": "./lib/as.js",
   "scripts": {

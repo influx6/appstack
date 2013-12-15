@@ -105,6 +105,8 @@ require('em')('appstack',function(e){
       },
 
       toArray: function(o){
+        if(this.isArgument(o)) 
+          return Array.prototype.splice.call(o,0,o.length);
         if(this.isString(o) || this.isObject(o)) return this.values(o);
         return [o];
       },
@@ -1084,12 +1086,6 @@ require('em')('appstack',function(e){
         return u;
       },
 
-      toArray: function(o){
-        if(this.isArgument(o)) 
-          return Array.splice.call(arguments,0,arguments.length);
-        if(this.isArray(o)) return o;
-        return this.arranize(o);
-      }
       
   };
 
@@ -2153,7 +2149,7 @@ require('em')('appstack',function(e){
               if(this.cfg.resolved && !this.cfg.rejected){ fn.apply(args[1],args[0]); return this; };
               if(this.lists.done.indexOf(fn) !== -1) return;
               this.lists.done.push(fn);
-              return this;
+              return this.promise();
             };
 
             p.fail = function(fn){
@@ -2162,7 +2158,7 @@ require('em')('appstack',function(e){
               if(!this.cfg.resolved && this.cfg.rejected){ fn.apply(args[1],args[0]); return this; };
               if(this.lists.fail.indexOf(fn) !== -1) return;
               this.lists.fail.push(fn);
-              return this;
+              return this.promise();
             };
 
             p.progress = function(fn){
@@ -2171,7 +2167,7 @@ require('em')('appstack',function(e){
               if(this.cfg.resolved || this.cfg.rejected){ fn.apply(args[1],args[0]); return this; };
               if(this.lists.notify.indexOf(fn) !== -1) return;
               this.lists.notify.push(fn);
-              return this;
+              return this.promise();
             };
 
             p.then = function(done,fail,progressfn){
@@ -2320,6 +2316,10 @@ require('em')('appstack',function(e){
           };
 
           return {
+            name:"AppStack.Promise",
+            description: "A Promise A spec compatible promise object",
+            licenses:[ { type: "mit", url: "http://mths.be/mit" }],
+            author: "Alexander Adeniyi Ewetumo",
             create: function(fn){
               return generator(fn);
             },
@@ -2349,7 +2349,7 @@ require('em')('appstack',function(e){
               });
 
               return defer;
-            }
+            },
           };
         })();
 
@@ -2358,19 +2358,24 @@ require('em')('appstack',function(e){
   })();
 
   AppStack.Distributors = function(){
-      var chain = {},
-          util = AppStack.Utility;
+      var chain = {
+        name:"AppStack.Distributors",
+        description: "creates a callback stack call",
+        licenses:[ { type: "mit", url: "http://mths.be/mit" }],
+        author: "Alexander Adeniyi Ewetumo",
+      },
+        util = AppStack.Utility;
 
       chain.callbacks = [];
+      chain._locked = false;
       
       chain.add = function(fn){
-        if(!this.callbacks || !!this.locked) return;
-        if(this.callbacks.indexOf(fn) != -1) return;
+        if(this.callbacks.indexOf(fn) != -1 || this.locked() || this.disabled()) return;
         this.callbacks.push(fn);
       };
       
       chain.distributeWith = function(context,args){
-        if(!this.callbacks) return;
+        if(this.disabled()) return;
         util.eachAsync(this.callbacks,function(e,i,o,fn){
             e.apply(context,args)
         });
@@ -2382,7 +2387,7 @@ require('em')('appstack',function(e){
       };
       
       chain.lock = function(){
-        this.locked = true;
+        this._locked = true;
       };
 
       chain.disable = function(){
@@ -2394,25 +2399,32 @@ require('em')('appstack',function(e){
       };
 
       chain.locked = function(){
-        return this.locked === true;
+        return this._locked === true;
       };
 
       return chain;
   };
   
-  AppStack.MiddleWare = function(){
-    var util = AppStack.Utility, ware = {};
+  AppStack.Middleware = function(){
+    var util = AppStack.Utility, ware = {
+      name:"AppStack.Middleware",
+      description: "creates a basic middle top-down continues next call function stack",
+      licenses:[ { type: "mit", url: "http://mths.be/mit" }],
+      author: "Alexander Adeniyi Ewetumo",
+    };
     ware.middlewares = [];
     ware.argument = [];
+    ware._locked = false;
     
     ware._nextCaller = function(index){
       return this.fireWith(this.argument[0],this.argument[1],index);
     };
 
     ware.add = function(fn){
-      if(this.locked || !this.middlewares) return;
+      if(this.locked() || this.disabled()) return;
+
       var self = this,
-          len = this.ware.middlewares.length,
+          len = this.middlewares.length,
           next = null,
           pipe = [];
       
@@ -2428,12 +2440,14 @@ require('em')('appstack',function(e){
     };
 
     ware.fireWith = function(context,args,start){
-      if(!this.middlewares) return;
+      if(this.disabled()) return;
+      
+      if(!!start && start > this.middlewares.length) return;
 
       var len = this.middlewares.length, 
           i = start || 0,
           root = this.middlewares[i];
-      
+        
         var fn = root[0], next  = root[1];
 
         this.argument[0] = context;
@@ -2447,15 +2461,147 @@ require('em')('appstack',function(e){
       this.fireWith(this,args);
     };
     
+    ware.lock = function(){
+      this._locked = true;
+    };
+
+    ware.disable = function(){
+      this.middlewares = null;
+    };
+
+    ware.disabled = function(){
+      return this.middlewares === null;
+    };
+
+    ware.locked = function(){
+      return this._locked === true;
+    };
+
     return ware;
   };
 
-  AppStack.Streams = function(max){
-     var streams = {};
-    streams.max = function(){ return max; };
+  AppStack.Mutator = function(fn){
+    var util = AppStack.Utility,
+    mutator = {
+      name:"AppStack.Mutator",
+      description: "uses function stacks to create a top-down mutating tree where a return type can be mutated",
+      licenses:[ { type: "mit", url: "http://mths.be/mit" }],
+      author: "Alexander Adeniyi Ewetumo",
+    };
 
+    mutator._locked = false;
+    mutator.mutators = [];
+    mutator.history = [];
 
-     return streams;
+    mutator.add = function(fn){
+      if(this.locked() || this.disabled()) return;
+      this.mutators.push(fn);
+    };
+    
+    mutator.fireWith = function(context,args){
+      if(this.disabled()) return;
+
+      var self = this, len = this.mutators.length,next;
+      
+      this.history.push(args);
+
+      next = function(i){
+        if(self.mutators.length <= i) return;
+        var args = self.history[self.history.length - 1];
+        var current = self.mutators[i];
+        var returned = current.apply(context,args);
+        if(!!returned) self.history.push([returned]);
+        next(i+1);
+      };
+      
+      next(0);
+    };
+    
+    mutator.fire = function(){
+      var args = util.toArray(arguments);
+      this.fireWith(this,args)
+    };
+    
+    mutator.lock = function(){
+      this._locked = true;
+    };
+
+    mutator.disable = function(){
+      this.mutators = null;
+    };
+
+    mutator.disabled = function(){
+      return this.mutators === null;
+    };
+
+    mutator.locked = function(){
+      return this._locked === true;
+    };
+
+    mutator.add(fn);
+    return mutator;
+  };
+  
+  AppStack.MutatorPromise = function(fn){
+    
+    var util = AppStack.Utility, mutator = {
+      name:"AppStack.MutatorPromise",
+      description: "uses promise to create a top-down mutating tree where a return type can be mutated",
+      licenses:[ { type: "mit", url: "http://mths.be/mit" }],
+      author: "Alexander Adeniyi Ewetumo",
+    };
+
+    mutator._locked = false;
+    mutator.mutators = AppStack.Promise.create();
+    mutator.history = [];
+    
+    mutator.add = function(fn){
+      var current = this.history[this.history.length - 1];
+
+      this.history.push(current.then(function(){
+        var args = util.toArray(arguments);
+        return fn.apply(this,args);
+      }));
+    };
+
+    mutator.fireWith = function(context,args){
+      var self = this, 
+        first = this.history[0],
+        last = this.history[this.history.length - 1];
+      
+      first.resolveWith(args,context);
+
+      last.done(function(){
+        var args = util.toArray(arguments)
+        self.mutators.resolveWith(args,this);
+      });
+    }
+
+    mutator.fire = function(){
+        var args = util.toArray(arguments);
+        this.fireWith(this,args);
+    };
+    
+    mutator.lock = function(){
+      this._locked = true;
+    };
+
+    mutator.disable = function(){
+      this.mutators = null;
+    };
+
+    mutator.disabled = function(){
+      return this.mutators === null;
+    };
+
+    mutator.locked = function(){
+      return this._locked === true;
+    };
+    
+    
+    mutator.history.push(AppStack.Promise.create());
+    mutator.add(fn);
+    return mutator;
   };
 
   this.exports = AppStack;
