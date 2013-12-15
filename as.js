@@ -300,7 +300,7 @@ require('em')('appstack',function(e){
           }
       },
 
-      isEmptyArray: function(){
+      isEmptyArray: function(o){
           if(this.isArray(o)){
             if(o.length === 0 || this.isArrayEmpty(o)){ return true; }
           }
@@ -559,26 +559,6 @@ require('em')('appstack',function(e){
           return setTimeout(fn,0);
       },
 
-      //destructive splice,changes the giving array instead of returning a new one
-      //writing to only work with positive numbers only
-      splice: function(o,start,end){
-         var i = 0,len = o.length;
-         if(!len || len <= 0) return false;
-         start = Math.abs(start); end = Math.abs(end);
-         if(end > (len - start)){
-          end = (len - start);
-        }
-
-        for(; i < len; i++){
-          o[i] = o[start];
-          start +=1;
-          if(i >= end) break;
-        }
-
-        o.length = end;
-        return o;
-
-      },
 
       shift: function(o){
             if(!this.isArray(o) || o.length <= 0) return;
@@ -1102,6 +1082,13 @@ require('em')('appstack',function(e){
             u[point[0]] = point[1];
         });
         return u;
+      },
+
+      toArray: function(o){
+        if(this.isArgument(o)) 
+          return Array.splice.call(arguments,0,arguments.length);
+        if(this.isArray(o)) return o;
+        return this.arranize(o);
       }
       
   };
@@ -2081,295 +2068,395 @@ require('em')('appstack',function(e){
 
   })(AppStack);
 
-  AppStack.Promise = (function(){
-     var Arr = Array.prototype,
-      Obj = Object.prototype,
-      typeOf = function(o,type){
-        var res = ({}).toString.call(o).replace(/\[object /,'').replace(/\]$/,'').toLowerCase();
-        if(type) return (res === type);
-        return res;
-      },
-      Splice = function(arg,b,e){
-        return Arr.splice.call(arg,b || 0,e || arg.length);
-      },
-      getKeys = function(o){
-        var keys = [];
-        for(var i in o){ keys.push(i); }
-        return keys;
-      },
-      eachSync = function(obj,iterator,complete,scope,breaker){
-              if(!iterator || typeof iterator !== 'function') return false;
-              if(typeof complete !== 'function') complete = function(){};
-
-
-              var step = 0, keys = getKeys(obj),fuse;
-
-              // if(typeof obj === 'string') obj = this.values(obj);
-
-              if(!keys.length) return false;
-              
-              fuse = function(){
-                var key = keys[step];
-                var item = obj[key];
-
-                (function(z,a,b,c){
-                  if(breaker && (breaker.call(z,a,b,c))){ /*complete.call(z);*/ return; }
-                  iterator.call(z,a,b,c,function completer(err){
-                      if(err){
-                        complete.call(z,err);
-                        complete = function(){};
-                      }else{
-                        step += 1;
-                        if(step === keys.length) return complete.call(z);
-                        else return fuse();
-                      }
-                  });
-               }((scope || this),item,key,obj));
-              };
-
-              fuse();
+    AppStack.Promise = (function(){
+       var Arr = Array.prototype,
+        Obj = Object.prototype,
+        typeOf = function(o,type){
+          var res = ({}).toString.call(o).replace(/\[object /,'').replace(/\]$/,'').toLowerCase();
+          if(type) return (res === type);
+          return res;
         },
-      Promise = (function(){
-        
-        var generator = function(fn){
+        Splice = function(arg,b,e){
+          return Arr.splice.call(arg,b || 0,e || arg.length);
+        },
+        getKeys = function(o){
+          var keys = [];
+          for(var i in o){ keys.push(i); }
+          return keys;
+        },
+        eachSync = function(obj,iterator,complete,scope,breaker){
+                if(!iterator || typeof iterator !== 'function') return false;
+                if(typeof complete !== 'function') complete = function(){};
 
-          var fire = function(arr,args,ctx){
-            return eachSync(arr,function(e,i,o,c){
-              if(e && typeOf(e,'function')) 
-                e.apply(ctx,(typeOf(args,'array') ? args : [args]));
-              c(false);
-            });
+
+                var step = 0, keys = getKeys(obj),fuse;
+
+                // if(typeof obj === 'string') obj = this.values(obj);
+
+                if(!keys.length) return false;
+                
+                fuse = function(){
+                  var key = keys[step];
+                  var item = obj[key];
+
+                  (function(z,a,b,c){
+                    if(breaker && (breaker.call(z,a,b,c))){ /*complete.call(z);*/ return; }
+                    iterator.call(z,a,b,c,function completer(err){
+                        if(err){
+                          complete.call(z,err);
+                          complete = function(){};
+                        }else{
+                          step += 1;
+                          if(step === keys.length) return complete.call(z);
+                          else return fuse();
+                        }
+                    });
+                 }((scope || this),item,key,obj));
+                };
+
+                fuse();
           },
-          proxy = function(fn,scope){
-            return function(){
-              var args = Arr.splice.call(arguments,0,arguments.length);
-              return fn.apply(scope,args);
+        Promise = (function(){
+          
+          var generator = function(fn){
+
+            var fire = function(arr,args,ctx){
+              return eachSync(arr,function(e,i,o,c){
+                if(e && typeOf(e,'function')) 
+                  e.apply(ctx,(typeOf(args,'array') ? args : [args]));
+                c(false);
+              });
+            },
+            proxy = function(fn,scope){
+              return function(){
+                var args = Arr.splice.call(arguments,0,arguments.length);
+                return fn.apply(scope,args);
+              };
+            },
+            p = { 
+              cfg: {
+                resolved: false,
+                rejected: false,
+              },
+              state: function(){
+                if(this.cfg.resolved && !this.cfg.rejected) return "resolved";
+                if(!this.cfg.resolved && this.cfg.rejected) return "rejected";
+                if(!this.cfg.resolved && !this.cfg.rejected) return "pending";
+              },
+              resLists:{ done: [], fail: [], notify: [] },
+              lists:{ done: [], fail: [], notify: [] } 
             };
-          },
-          p = { 
-            cfg: {
-              resolved: false,
-              rejected: false,
-            },
-            state: function(){
-              if(this.cfg.resolved && !this.cfg.rejected) return "resolved";
-              if(!this.cfg.resolved && this.cfg.rejected) return "rejected";
-              if(!this.cfg.resolved && !this.cfg.rejected) return "pending";
-            },
-            resLists:{ done: [], fail: [], notify: [] },
-            lists:{ done: [], fail: [], notify: [] } 
-          };
 
-          p.done = function(fn){
-            if(typeof fn !== 'function') return this;
-            var args = this.resLists.done;
-            if(this.cfg.resolved && !this.cfg.rejected){ fn.apply(args[1],args[0]); return this; };
-            if(this.lists.done.indexOf(fn) !== -1) return;
-            this.lists.done.push(fn);
-            return this;
-          };
+            p.done = function(fn){
+              if(typeof fn !== 'function') return this;
+              var args = this.resLists.done;
+              if(this.cfg.resolved && !this.cfg.rejected){ fn.apply(args[1],args[0]); return this; };
+              if(this.lists.done.indexOf(fn) !== -1) return;
+              this.lists.done.push(fn);
+              return this;
+            };
 
-          p.fail = function(fn){
-            if(typeof fn !== 'function') return this;
-            var args = this.resLists.fail;
-            if(!this.cfg.resolved && this.cfg.rejected){ fn.apply(args[1],args[0]); return this; };
-            if(this.lists.fail.indexOf(fn) !== -1) return;
-            this.lists.fail.push(fn);
-            return this;
-          };
+            p.fail = function(fn){
+              if(typeof fn !== 'function') return this;
+              var args = this.resLists.fail;
+              if(!this.cfg.resolved && this.cfg.rejected){ fn.apply(args[1],args[0]); return this; };
+              if(this.lists.fail.indexOf(fn) !== -1) return;
+              this.lists.fail.push(fn);
+              return this;
+            };
 
-          p.progress = function(fn){
-            if(typeof fn !== 'function') return this;
-            var args = this.resLists.notify;
-            if(this.cfg.resolved || this.cfg.rejected){ fn.apply(args[1],args[0]); return this; };
-            if(this.lists.notify.indexOf(fn) !== -1) return;
-            this.lists.notify.push(fn);
-            return this;
-          };
+            p.progress = function(fn){
+              if(typeof fn !== 'function') return this;
+              var args = this.resLists.notify;
+              if(this.cfg.resolved || this.cfg.rejected){ fn.apply(args[1],args[0]); return this; };
+              if(this.lists.notify.indexOf(fn) !== -1) return;
+              this.lists.notify.push(fn);
+              return this;
+            };
 
-          p.then = function(done,fail,progressfn){
-            var self = this;
-            var defer = generator();
-              
+            p.then = function(done,fail,progressfn){
+              var self = this;
+              var defer = generator();
+                
 
-            if(!!done){
-                self.done(function(){
-                  var args = Arr.splice.call(arguments,0,arguments.length);
-                  var ret = done.apply({},args);
-
-                  if(!ret) return self.done(function(){
+              if(!!done){
+                  self.done(function(){
                     var args = Arr.splice.call(arguments,0,arguments.length);
-                    defer.resolveWith(args,defer);
-                  });
+                    var ret = done.apply({},args);
 
-                  if(typeof ret['isPromise'] !== 'undefined' && ret.isPromise()){
-                    ret.done(function(){
+                    if(!ret) return self.done(function(){
                       var args = Arr.splice.call(arguments,0,arguments.length);
                       defer.resolveWith(args,defer);
                     });
-                  }else defer.resolve(ret);
-              });
-            }
-           
-            if(!!fail){
-              self.fail(function(n){
-                  var args = Arr.splice.call(arguments,0,arguments.length);
-                  var ret = fail.apply({},args);
 
-                  if(!ret) return self.fail(function(){
+                    if(typeof ret['isPromise'] !== 'undefined' && ret.isPromise()){
+                      ret.done(function(){
+                        var args = Arr.splice.call(arguments,0,arguments.length);
+                        defer.resolveWith(args,defer);
+                      });
+                    }else defer.resolve(ret);
+                });
+              }
+             
+              if(!!fail){
+                self.fail(function(n){
                     var args = Arr.splice.call(arguments,0,arguments.length);
-                    defer.rejectWith(args,defer);
-                  });
-                  
-                  if(typeof ret['isPromise'] !== 'undefined' && ret.isPromise()){
-                    ret.fail(function(){
+                    var ret = fail.apply({},args);
+
+                    if(!ret) return self.fail(function(){
                       var args = Arr.splice.call(arguments,0,arguments.length);
                       defer.rejectWith(args,defer);
                     });
+                    
+                    if(typeof ret['isPromise'] !== 'undefined' && ret.isPromise()){
+                      ret.fail(function(){
+                        var args = Arr.splice.call(arguments,0,arguments.length);
+                        defer.rejectWith(args,defer);
+                      });
 
-                  }else defer.reject(ret);
-              });
-            }
-            
-           if(!!progressfn){
-             self.progress(function(){
-                  var args = Arr.splice.call(arguments,0,arguments.length);
-                  var ret = progressfn.apply({},args);
-             
-                  if(!ret) return self.progress(function(){
+                    }else defer.reject(ret);
+                });
+              }
+              
+             if(!!progressfn){
+               self.progress(function(){
                     var args = Arr.splice.call(arguments,0,arguments.length);
-                    defer.notifyWith(args,defer);
-                  });
-                  
-                  if(typeof ret['isPromise'] !== 'undefined' && ret.isPromise()){
-                    ret.progress(function(){
+                    var ret = progressfn.apply({},args);
+               
+                    if(!ret) return self.progress(function(){
                       var args = Arr.splice.call(arguments,0,arguments.length);
                       defer.notifyWith(args,defer);
                     });
-                  }else defer.notify(ret);
-             });
-           }
+                    
+                    if(typeof ret['isPromise'] !== 'undefined' && ret.isPromise()){
+                      ret.progress(function(){
+                        var args = Arr.splice.call(arguments,0,arguments.length);
+                        defer.notifyWith(args,defer);
+                      });
+                    }else defer.notify(ret);
+               });
+             }
 
-            return defer;
-          };
-
-          p.resolveWith = function(args,ctx){
-            if(this.cfg.resolved || this.cfg.rejected) return;
-            this.cfg.rejected = false;
-            this.cfg.resolved = true;
-            this.resLists.done = [args,ctx];
-            fire(this.lists.done,args,ctx);
-            fire(this.lists.notify,args,ctx);
-            return this;
-          };
-
-          p.rejectWith = function(args,ctx){
-            if(this.cfg.resolved || this.cfg.rejected) return;
-            this.cfg.rejected = true;
-            this.cfg.resolved = false;
-            this.resLists.fail = [args,ctx];
-            fire(this.lists.fail,args,ctx);
-            fire(this.lists.notify,args,ctx);
-            return this;
-          };
-
-          p.notifyWith = function(args,ctx){
-            if(this.cfg.resolved || this.cfg.rejected) return;
-            // this.cfg = "resolved",
-            this.resLists.notify = [args,ctx];
-            fire(this.lists.notify,args,ctx);
-            return this;
-          };
-
-          p.resolve = function(){
-            var args = Arr.splice.call(arguments,0,arguments.length);
-            this.resolveWith(args,this);
-            return this;
-          };
-          p.reject = function(){
-            var args = Arr.splice.call(arguments,0,arguments.length);
-            this.rejectWith(args,this);
-            return this;
-          };
-          p.notify = function(){
-            var args = Arr.splice.call(arguments,0,arguments.length);
-            this.notifyWith(args,this);
-            return this;
-          };
-          p.promise = function(){
-            var shell = {},self = this;
-            shell.fail = function(fn){
-                self.fail(fn);
-                return this;
-            };
-            shell.progress = function(fn){
-                self.progress(fn);
-                return this;
-            };
-            shell.done = function(fn){
-                self.done(fn);
-                return this;
+              return defer;
             };
 
-            shell.state = proxy(this.state,this);
-            shell.then = proxy(this.then,this);
-            shell.promise = function(){return this; }
-            shell.isPromise = function(){ return true; }
-            
-            self.promise = function(){
+            p.resolveWith = function(args,ctx){
+              if(this.cfg.resolved || this.cfg.rejected) return;
+              this.cfg.rejected = false;
+              this.cfg.resolved = true;
+              this.resLists.done = [args,ctx];
+              fire(this.lists.done,args,ctx);
+              fire(this.lists.notify,args,ctx);
+              return this;
+            };
+
+            p.rejectWith = function(args,ctx){
+              if(this.cfg.resolved || this.cfg.rejected) return;
+              this.cfg.rejected = true;
+              this.cfg.resolved = false;
+              this.resLists.fail = [args,ctx];
+              fire(this.lists.fail,args,ctx);
+              fire(this.lists.notify,args,ctx);
+              return this;
+            };
+
+            p.notifyWith = function(args,ctx){
+              if(this.cfg.resolved || this.cfg.rejected) return;
+              // this.cfg = "resolved",
+              this.resLists.notify = [args,ctx];
+              fire(this.lists.notify,args,ctx);
+              return this;
+            };
+
+            p.resolve = function(){
+              var args = Arr.splice.call(arguments,0,arguments.length);
+              this.resolveWith(args,this);
+              return this;
+            };
+            p.reject = function(){
+              var args = Arr.splice.call(arguments,0,arguments.length);
+              this.rejectWith(args,this);
+              return this;
+            };
+            p.notify = function(){
+              var args = Arr.splice.call(arguments,0,arguments.length);
+              this.notifyWith(args,this);
+              return this;
+            };
+            p.promise = function(){
+              var shell = {},self = this;
+              shell.fail = function(fn){
+                  self.fail(fn);
+                  return this;
+              };
+              shell.progress = function(fn){
+                  self.progress(fn);
+                  return this;
+              };
+              shell.done = function(fn){
+                  self.done(fn);
+                  return this;
+              };
+
+              shell.state = proxy(this.state,this);
+              shell.then = proxy(this.then,this);
+              shell.promise = function(){return this; }
+              shell.isPromise = function(){ return true; }
+              
+              self.promise = function(){
+                return shell;
+              };
+
               return shell;
             };
 
-            return shell;
+            p.isPromise = function(){ return true; };
+
+            if(fn && typeof fn === 'function'){ fn(p); return p; }
+            if(fn && typeof fn !== 'function' && fn !== null && fn !== false && fn !== 'undefined') return p.resolve(fn);
+            if(typeof fn !== 'function' && fn === false) return p.reject(fn);
+
+            return p;
           };
 
-          p.isPromise = function(){ return true; };
+          return {
+            create: function(fn){
+              return generator(fn);
+            },
+            when: function(){
+              var args = Arr.splice.call(arguments,0,arguments.length),
+              len = args.length,
+              counter = 0,
+              // set = [],
+              argd = [],
+              defer = generator();
 
-          if(fn && typeof fn === 'function'){ fn(p); return p; }
-          if(fn && typeof fn !== 'function' && fn !== null && fn !== false && fn !== 'undefined') return p.resolve(fn);
-          if(typeof fn !== 'function' && fn === false) return p.reject(fn);
+              eachSync(args,function(e,i,o,c){
+                // if(e && typeof e !== 'function') return c(false);
+                var a = (e['isPromise'] && e.isPromise()) ? e : generator(e);
+                a.then(function(){
+                  counter += 1;
+                  if(counter === len) defer.resolve(argd);
+                },function(){
+                  defer.reject(argd);
+                },function(){
+                  var res = Arr.splice.call(arguments,0,arguments.length);
+                  argd.push(res.length === 1 ? res[0] : res);
+                });
 
-          return p;
-        };
-
-        return {
-          create: function(fn){
-            return generator(fn);
-          },
-          when: function(){
-            var args = Arr.splice.call(arguments,0,arguments.length),
-            len = args.length,
-            counter = 0,
-            // set = [],
-            argd = [],
-            defer = generator();
-
-            eachSync(args,function(e,i,o,c){
-              // if(e && typeof e !== 'function') return c(false);
-              var a = (e['isPromise'] && e.isPromise()) ? e : generator(e);
-              a.then(function(){
-                counter += 1;
-                if(counter === len) defer.resolve(argd);
-              },function(){
-                defer.reject(argd);
-              },function(){
-                var res = Arr.splice.call(arguments,0,arguments.length);
-                argd.push(res.length === 1 ? res[0] : res);
+                // set.push(a);
+                c(false);
               });
 
-              // set.push(a);
-              c(false);
-            });
+              return defer;
+            }
+          };
+        })();
 
-            return defer;
-          }
-        };
-      })();
+        return Promise;
 
-      return Promise;
+  })();
 
-})();
+  AppStack.Distributors = function(){
+      var chain = {},
+          util = AppStack.Utility;
 
+      chain.callbacks = [];
+      
+      chain.add = function(fn){
+        if(!this.callbacks || !!this.locked) return;
+        if(this.callbacks.indexOf(fn) != -1) return;
+        this.callbacks.push(fn);
+      };
+      
+      chain.distributeWith = function(context,args){
+        if(!this.callbacks) return;
+        util.eachAsync(this.callbacks,function(e,i,o,fn){
+            e.apply(context,args)
+        });
+      };
+      
+      chain.distribute = function(){
+        var args = util.toArray(arguments);
+        this.distributeWith(this,args);
+      };
+      
+      chain.lock = function(){
+        this.locked = true;
+      };
+
+      chain.disable = function(){
+        this.callbacks = null;
+      };
+
+      chain.disabled = function(){
+        return this.callbacks === null;
+      };
+
+      chain.locked = function(){
+        return this.locked === true;
+      };
+
+      return chain;
+  };
+  
+  AppStack.MiddleWare = function(){
+    var util = AppStack.Utility, ware = {};
+    ware.middlewares = [];
+    ware.argument = [];
+    
+    ware._nextCaller = function(index){
+      return this.fireWith(this.argument[0],this.argument[1],index);
+    };
+
+    ware.add = function(fn){
+      if(this.locked || !this.middlewares) return;
+      var self = this,
+          len = this.ware.middlewares.length,
+          next = null,
+          pipe = [];
+      
+      next = function(){
+        var inx = len + 1;
+        return self._nextCaller(inx);
+      };
+
+      pipe.push(fn);
+      pipe.push(next);
+      
+      this.middlewares.push(pipe);
+    };
+
+    ware.fireWith = function(context,args,start){
+      if(!this.middlewares) return;
+
+      var len = this.middlewares.length, 
+          i = start || 0,
+          root = this.middlewares[i];
+      
+        var fn = root[0], next  = root[1];
+
+        this.argument[0] = context;
+        this.argument[1] = args;
+        
+        return fn.apply(context,util.flatten([args,next]));
+    };
+
+    ware.fire = function(){
+      var args = util.toArray(arguments);
+      this.fireWith(this,args);
+    };
+    
+    return ware;
+  };
+
+  AppStack.Streams = function(max){
+     var streams = {};
+    streams.max = function(){ return max; };
+
+
+     return streams;
+  };
 
   this.exports = AppStack;
 
