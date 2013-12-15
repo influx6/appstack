@@ -6,9 +6,6 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-   "dependencies":{
-      "em.js":"0.1.x",
-  },
   "keywords": [
     "as"
   ],
