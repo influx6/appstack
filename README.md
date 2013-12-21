@@ -26,3 +26,8 @@ a stack of js utilities and libraries
   ASColors: as.ASColors (Provides client and command side color code with String.prototype staining)
   
   Counter: as.Counter (Provides a basic increment and decrement counter,useful for sizes handle)
+
+  StateManager: as.StateManager (Provides a object that creates a set of
+      state objects based on a set of function names,allowing the
+      switching of states while still using the standard set of function
+    names for different behaviours)
