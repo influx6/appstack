@@ -612,7 +612,6 @@ require('em')('appstack',function(e){
             var ind = o.length - 1;
             var data =  o[ind];
             delete o[ind];
-            o.length = ind;
             return data;
       },
 
@@ -1380,6 +1379,7 @@ require('em')('appstack',function(e){
       var util = AppStack.Utility;
 
       var setup =  function(ability,parent){
+        if(!util.isObject(ability)) throw "Supply an object of properties";
 
         var ClassSchema = function(){};
         
@@ -1411,6 +1411,8 @@ require('em')('appstack',function(e){
                    return ret;
                 };
                 
+                wrapper.fns =fn;
+                
                 return wrapper;
             });
             
@@ -1432,6 +1434,8 @@ require('em')('appstack',function(e){
                    this.Super = temp;
                    return ret;
                 };
+                
+                wrapper.fns =fn;
                 
                 return wrapper;
           });
@@ -2436,18 +2440,6 @@ require('em')('appstack',function(e){
         this.callbacks.push(fn);
       };
       
-      chain.addOnce = function(fn){
-        if(this.callbacks.indexOf(fn) != -1 || this.locked() || this.disabled()) return;
-        self = this;
-        var fns = function(){
-          var args = util.toArray(arguments), ret = fn.apply(this,args);
-          self.remove(fns);
-          return ret;
-        };
-
-        this.callbacks.push(fns);
-      };
-
       chain.distributeWith = function(context,args){
         if(this.disabled()) return;
         util.eachAsync(this.callbacks,function(e,i,o,fn){
@@ -2481,10 +2473,6 @@ require('em')('appstack',function(e){
         util.explode(this.callbacks);
         this.disable();
       };
-      
-      chain.isEmpty = function(){
-          return this.callbacks.length === 0;
-      };
 
       return chain;
   };
@@ -2504,32 +2492,20 @@ require('em')('appstack',function(e){
       return this.fireWith(this.argument[0],this.argument[1],index);
     };
 
-    ware.add = function(fn,once){
+    ware.add = function(fn){
       if(this.locked() || this.disabled()) return;
 
       var self = this,
           len = this.middlewares.length,
-          next = null, fns = null,
+          next = null,
           pipe = [];
       
-      fns = function(){
-        var args = util.toArray(arguments);
-        var ind  = self.middlewares.indexOf(pipe);
-        var ret  = fn.apply(this,args);
-        if(once){
-          if(ind === -1) return;
-          delete self.middlewares[ind];
-          util.normalizeArray(this.middlewares);
-        }
-        return ret;
-      };
-
       next = function(){
         var inx = len + 1;
         return self._nextCaller(inx);
       };
 
-      pipe.push(fns);
+      pipe.push(fn);
       pipe.push(next);
       
       this.middlewares.push(pipe);
@@ -2579,10 +2555,6 @@ require('em')('appstack',function(e){
       return this._locked === true;
     };
 
-    ware.isEmpty = function(){
-        return this.middlewares.length === 0;
-    };
-
     return ware;
   };
 
@@ -2610,22 +2582,11 @@ require('em')('appstack',function(e){
     };
 
     mutator.add = function(fn){
-      if(this.mutators.indexOf(fn) != -1 || this.locked() || this.disabled()) return;
+      if(this.locked() || this.disabled()) return;
+      if(this.mutators.indexOf(fn) !== -1) return;
       this.mutators.push(fn);
     };
     
-    mutator.addOnce = function(fn){
-        if(this.mutators.indexOf(fn) != -1 || this.locked() || this.disabled()) return;
-        self = this;
-        var fns = function(){
-          var args = util.toArray(arguments), ret = fn.apply(this,args);
-          self.remove(fns);
-          return ret;
-        };
-
-        this.mutators.push(fns);
-    };
-
     mutator.fireWith = function(context,args){
       if(this.disabled()) return;
       
@@ -2670,10 +2631,6 @@ require('em')('appstack',function(e){
 
     mutator.locked = function(){
       return this._locked === true;
-    };
-
-    mutator.isEmpty = function(){
-      return this.mutators.length === 0;
     };
 
     mutator.close = function(){
