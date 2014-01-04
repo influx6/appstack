@@ -5,7 +5,7 @@ var ma = as.Matchers;
 ma.scoped('array injector test');
 
 var inj = as.ArrayInjector.make(function(f){
-    if(f.length >= 3) return true;
+    if(f.length > 5) return true;
     return false;
 });
 
@@ -23,5 +23,5 @@ posj.on(function(cur){
 });
 
 
-inj.push(10,20,30);
+inj.push(10,20,30,40,50,60,70,80,90,100,101,102,103);
 posj.push(2,30).push(0,20).push(1,10).push(4,40);
