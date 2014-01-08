@@ -12,6 +12,10 @@
   "keywords": [
     "as"
   ],
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/influx6/appstack"
+  },
   "author": "Alexander Ewetump",
   "license": "mit"
 }
